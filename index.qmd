@@ -30,6 +30,10 @@ ATTENTION
 - local : kaggle/input/equity-post-HCT-survival-predictions/train.csv
 - kaggle : /kaggle/input/equity-post-HCT-survival-predictions/train.csv
 
+## Scoring
+
+baseline random forest :: ranger = 563
+
 ## Notebook setup
 
 ```{r include = FALSE}
