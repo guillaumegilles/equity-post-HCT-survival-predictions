@@ -1,0 +1,265 @@
+---
+title: Equity in post-HCT Survival Predictions
+abstract: >-
+  In this competition, you’ll develop models to improve the prediction
+  of transplant survival rates for patients undergoing allogeneic
+  Hematopoietic Cell Transplantation (HCT) — an important step in
+  ensuring that every patient has a fair chance at a successful outcome,
+  regardless of their background.
+authors: 
+  - name: Guillaume Gilles
+    orcid: 0009-0000-7940-9359
+    email: guillaumegilles@me.com
+bibliography: references.bib
+citation-location: margin
+image: header.png
+date: 2024-12-04
+date-modified: 2024-12-19
+categories:
+  - Kaggle
+  - Machine Learning
+  - R
+format:
+  html: 
+    toc: true
+    toc-depth: 3
+---
+
+## Notebook setup
+
+```{r include = FALSE}
+# Quarto R setup
+library(tidyverse)
+library(tidymodels)
+library(ranger)
+library(knitr)
+
+knitr::opts_chunk$set(
+    cache = TRUE,
+    cache.lazy = FALSE,
+    warning = FALSE,
+    message =  FALSE,
+    echo = TRUE,
+    dpi = 180,
+    fig.width = 8,
+    fig.height = 5
+)
+
+theme_set(theme_minimal())
+update_geom_defaults("rect", list(fill = "midnightblue", alpha = 0.8))
+update_geom_defaults("line", list(color = "midnightblue", alpha = 0.8))
+update_geom_defaults("point", list(color = "midnightblue", alpha = 0.8))
+```
+
+## Exploratory Data Analysis
+
+### Dataset Description
+
+```{r}
+data <- read_csv("kaggle/input/equity-post-HCT-survival-predictions/train.csv")
+```
+
+The dataset consists of 59 variables related to hematopoietic stem cell
+transplantation (HSCT), encompassing a range of demographic and medical
+characteristics of both recipients and donors, such as age, sex, ethnicity,
+disease status, and treatment details.
+
+The primary outcome of interest is event-free survival, represented by
+the variable `efs`, while the time to event-free survival is captured by
+the variable `efs_time`. These two variables together encode the target
+for a censored time-to-event analysis.
+
+The data, which features equal representation across recipient racial
+categories including White, Asian, African-American, Native American,
+Pacific Islander, and More than One Race, was synthetically generated
+using the data generator from [synthcity](https://github.com/vanderschaarlab/synthcity),
+trained on a large cohort of real [CIBMTR](https://cibmtr.org/CIBMTR/About)
+data.
+
+We have used the SurvivalGAN method, introduced in the paper "[SurvivalGAN: Generating Time-to-Event Data for Survival Analysis](https://proceedings.mlr.press/v206/norcliffe23a.html)"
+which addresses the generation of synthetic survival data with special
+considerations for censoring. SurvivalGAN is adept at capturing the
+intricate relationships and interactions among variables within survival
+data and their influence on time-to-event outcomes. This generative model
+utilizes a conditional Generative Adversarial Network (GAN) framework,
+which is specifically tailored to address the complexities of survival
+analysis, including the critical task of managing censored data. 
+
+By conditioning on additional information such as censoring status and
+actual survival times, SurvivalGAN effectively learns the underlying
+distribution of the data, ensuring that the generated synthetic dataset
+retains the essential interactions among variables that are predictive
+of survival outcomes.
+
+### Data Analysis
+
+1. Transforming efs into factor
+
+```{r}
+data <- data |>
+  mutate(efs = as.factor(efs))
+```
+
+2. Drop efs_time for now because there is no in test.csv
+
+```{r}
+data <- data |>
+  select(-efs_time)
+```
+
+  - preprocessing
+  - encoding bool + string
+  - normalization / standardization
+  - feature engineer
+
+## Modeling
+
+### Splitting Data Set
+
+### Evaluation Criteria
+
+The evaluation of prediction accuracy in the competition will involve a
+specialized metric known as the Stratified Concordance Index (C-index),
+adapted to consider different racial groups independently. This method
+allows us to gauge the predictive performance of models in a way that
+emphasizes equitability across diverse patient populations, particularly
+focusing on racial disparities in transplant outcomes.
+
+### Concordance index
+
+It represents the global assessment of the model discrimination power:
+this is the model’s ability to correctly provide a reliable ranking of
+the survival times based on the individual risk scores. It can be
+computed with the following formula:
+
+$C-index = \frac{ \sum_{{i}{j}} 1_{{T_{j}} < {T_{i}}} \cdot }{\sum_{{i}{j}}}$
+
+with:
+
+- $n_{i}$, the risk score of a unit ${i}$
+- $1_{{T_{j}} < {T_{i}}} = 1$ if ${T_{j}} < {T_{i}}$ else $0$
+
+
+The concordance index is a value between $0$ and $1$ where:
+
+- $0.5$ is the expected result from random predictions,
+- $1.0$ is a perfect concordance and,
+- $0.0$ is perfect anti-concordance (multiply predictions with -1 to get 1.0)
+
+Similarly to AUC, $C-index = 1$ corresponds to the best model prediction,
+and $C-index = 0.5$ represents a random prediction.
+
+Stratified Concordance Index
+
+For this competition, we adjust the standard C-index to account for racial stratification, thus ensuring that each racial group's outcomes are weighed equally in the model evaluation. The stratified c-index is calculated as the mean minus the standard deviation of the c-index scores calculated within the recipient race categories, i.e., the score will be better if the mean c-index over the different race categories is large and the standard deviation of the c-indices over the race categories is small. This value will range from 0 to 1, 1 is the theoretical perfect score, but this value will practically be lower due to censored outcomes.
+
+The submitted risk scores will be evaluated using the score function. This evaluation process involves comparing the submitted risk scores against actual observed values (i.e., survival times and event occurrences) from a test dataset. The function specifically calculates the stratified concordance index across different racial groups, ensuring that the predictions are not only accurate overall but also equitable across diverse patient demographics.
+The implementation of the metric is wound in this notebook.
+Submission File
+
+Participants must submit their predictions for the test dataset as real-valued risk scores. These scores represent the model's assessment of each patient's risk following transplantation. A higher risk score typically indicates a higher likelihood of the target event occurrence.
+
+The submission file must include a header and follow this format:
+
+ID,prediction
+28800,0.5
+28801,1.2
+28802,0.8
+etc.
+
+where:
+
+ID refers to the identifier for each patient in the test dataset.
+prediction is the corresponding risk score generated by your model.
+
+### Baseline
+
+```{r}
+split <- initial_split(data, prop = 0.8)
+train <- training(split)
+test <- testing(split)
+```
+
+```{r}
+# Define the random forest model
+rf_model <- rand_forest(trees = 100,
+                        mtry = 3,
+                        min_n = 5) |>
+  set_engine("ranger") |>
+  set_mode("classification")
+```
+
+#### Create a recipe 
+```{r}
+rf_recipe <- recipe(efs ~ ., data = train) |>
+  step_impute_mean(all_numeric_predictors()) |>       # Mean Imputation
+  step_impute_mode(all_nominal_predictors()) |>       # Mode Imputation
+  step_normalize(all_numeric_predictors())            # Normalize numeric predictors if needed
+```
+
+#### Create a workflow
+
+```{r}
+rf_workflow <- workflow() |>
+  add_recipe(rf_recipe) |>
+  add_model(rf_model)
+```
+
+#### Fit the model
+
+```{r}
+rf_fit <- rf_workflow |>
+  fit(data = train)
+```
+
+#### Make predictions
+
+```{r}
+predictions <- rf_fit |>
+  predict(new_data = test) |>
+  bind_cols(test)
+```
+
+## Submission
+
+need to bind valid$id + prediction on valid_set
+
+```{r}
+# Preparing valid dataset for prediction
+valid <- read_csv("kaggle/input/equity-post-HCT-survival-predictions/test.csv")
+
+# Creating a submission.csv
+submission <- rf_fit |>
+  predict(new_data = valid) |>
+  bind_cols(valid) |>
+  select(ID, .pred_class)  # Replace .pred_class with the name of the prediction column if needed
+
+# Rename the prediction column to match the competition's requirements
+colnames(submission) <- c("ID", "prediction")
+
+write_csv(submission, "submission.csv")
+```
+
+
+```{r}
+# # Evaluate performance
+# metrics <- metrics(predictions, truth = sii, estimate = .pred_class)  # Change .pred_class to the appropriate column name
+# print(metrics)
+```
+
+```{r}
+# train_less_pciat |>
+#   mutate_if(is.character, as.factor) |>
+#  mutate(across(categorial_features, as.factor))
+
+
+# split <- data |>
+#   drop_na(sii) %>%
+#   initial_split()
+```
+
+## References
+
+::: {ref}
+
+:::

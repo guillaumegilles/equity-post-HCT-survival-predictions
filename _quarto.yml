@@ -1,0 +1,27 @@
+project:
+  type: manuscript
+  output-dir: docs
+
+manuscript:
+  article: index.qmd
+  code-links: 
+    - text: Back to Website
+      icon: browser-firefox
+      href: https://guillaumegilles.github.io/
+
+format:
+  html:
+    theme: flatly
+    comments:
+      hypothesis: true
+  # docx: default
+  # jats: default
+
+  # (other formats)
+  # pdf: default
+
+execute:
+  freeze: true
+
+
+

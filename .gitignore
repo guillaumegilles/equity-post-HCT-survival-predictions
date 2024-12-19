@@ -1,0 +1,3 @@
+# Ignoring directories countaining data. See: Competition Rules
+kaggle/
+/.quarto/

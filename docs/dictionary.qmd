@@ -1,0 +1,11 @@
+---
+title: Data Dictionary
+---
+
+```{r}
+library(knitr)
+library(readr)
+
+read_csv("kaggle/input/equity-post-HCT-survival-predictions/data_dictionary.csv") |>
+    kable(caption = "Data Dictionary")
+```
