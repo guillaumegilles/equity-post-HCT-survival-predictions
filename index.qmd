@@ -25,6 +25,11 @@ format:
     toc-depth: 3
 ---
 
+ATTENTION
+
+- local : kaggle/input/equity-post-HCT-survival-predictions/train.csv
+- kaggle : /kaggle/input/equity-post-HCT-survival-predictions/train.csv
+
 ## Notebook setup
 
 ```{r include = FALSE}
