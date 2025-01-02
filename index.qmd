@@ -33,14 +33,24 @@ ATTENTION
 ## Scoring
 
 baseline random forest :: ranger = 563
+::: {.callout}
+# To Do
+1. remove `ID` columns from training set
+2. Create an xgboost model
+3. figure out c-index evaluation
+4. Most voted discussion on Kaggle
+:::
 
 ## Notebook setup
 
-```{r include = FALSE}
+```{r}
 # Quarto R setup
-library(tidyverse)
-library(tidymodels)
-library(ranger)
+library(tidyverse)  # collection of R packages designed for data science
+library(tidymodels) # collection of packages for modeling and machine learning
+tidymodels_prefer()
+library(ranger)     # fast implementation of random forests
+library(glmnet)
+library(xgboost)
 library(knitr)
 
 knitr::opts_chunk$set(
@@ -54,10 +64,10 @@ knitr::opts_chunk$set(
     fig.height = 5
 )
 
-theme_set(theme_minimal())
-update_geom_defaults("rect", list(fill = "midnightblue", alpha = 0.8))
-update_geom_defaults("line", list(color = "midnightblue", alpha = 0.8))
-update_geom_defaults("point", list(color = "midnightblue", alpha = 0.8))
+# theme_set(theme_minimal())
+# update_geom_defaults("rect", list(fill = "midnightblue", alpha = 0.8))
+# update_geom_defaults("line", list(color = "midnightblue", alpha = 0.8))
+# update_geom_defaults("point", list(color = "midnightblue", alpha = 0.8))
 ```
 
 ## Exploratory Data Analysis
@@ -69,9 +79,9 @@ data <- read_csv("kaggle/input/equity-post-HCT-survival-predictions/train.csv")
 ```
 
 The dataset consists of 59 variables related to hematopoietic stem cell
-transplantation (HSCT), encompassing a range of demographic and medical
-characteristics of both recipients and donors, such as age, sex, ethnicity,
-disease status, and treatment details.
+transplantation (HSCT), and $28 800$ observations compassing a range of
+demographic and medical characteristics of both recipients and donors,
+such as age, sex, ethnicity, disease status, and treatment details.
 
 The primary outcome of interest is event-free survival, represented by
 the variable `efs`, while the time to event-free survival is captured by
@@ -102,11 +112,17 @@ of survival outcomes.
 
 ### Data Analysis
 
-1. Transforming efs into factor
+```{r}
+ggplot(data, aes(efs_time, ID, color = efs)) +
+  geom_point()
+```
+
+1. Transforming efs and character vector into factor
 
 ```{r}
 data <- data |>
-  mutate(efs = as.factor(efs))
+  mutate(efs = as.factor(efs)) |>
+  mutate(across(where(is.character), as.factor))
 ```
 
 2. Drop efs_time for now because there is no in test.csv
@@ -189,6 +205,10 @@ train <- training(split)
 test <- testing(split)
 ```
 
+#### Random forest
+
+Define the random forest model w/ RANGER = LB: **563**
+
 ```{r}
 # Define the random forest model
 rf_model <- rand_forest(trees = 100,
@@ -198,7 +218,8 @@ rf_model <- rand_forest(trees = 100,
   set_mode("classification")
 ```
 
-#### Create a recipe 
+##### Create a recipe
+
 ```{r}
 rf_recipe <- recipe(efs ~ ., data = train) |>
   step_impute_mean(all_numeric_predictors()) |>       # Mean Imputation
@@ -206,7 +227,7 @@ rf_recipe <- recipe(efs ~ ., data = train) |>
   step_normalize(all_numeric_predictors())            # Normalize numeric predictors if needed
 ```
 
-#### Create a workflow
+##### Create a workflow
 
 ```{r}
 rf_workflow <- workflow() |>
@@ -214,19 +235,29 @@ rf_workflow <- workflow() |>
   add_model(rf_model)
 ```
 
-#### Fit the model
+##### Fit the model
 
 ```{r}
 rf_fit <- rf_workflow |>
   fit(data = train)
 ```
 
-#### Make predictions
+##### Make predictions
 
 ```{r}
 predictions <- rf_fit |>
   predict(new_data = test) |>
   bind_cols(test)
+```
+
+#### C-index
+```{r}
+concordance_survival(
+  data = predictions,
+  truth = efs,
+  estimate = .pred_class,
+  na_rm = TRUE
+)
 ```
 
 ## Submission

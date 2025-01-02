@@ -3,9 +3,12 @@ title: Data Dictionary
 ---
 
 ```{r}
-library(knitr)
+#| column: page
+
 library(readr)
+library(knitr)
 
 read_csv("kaggle/input/equity-post-HCT-survival-predictions/data_dictionary.csv") |>
-    kable(caption = "Data Dictionary")
+    kable(caption = "Data Dictionary",
+          format = "simple")
 ```
