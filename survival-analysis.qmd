@@ -1,0 +1,119 @@
+# Survival Analysis
+
+A survival snalysis is a set of statistical tools to study the time to a specific
+event, such as relapse or death,
+
+## Kaplan-Meier Curve
+
+The Kaplan-Meier estimator, independently described by Edward Kaplan and Paul
+Meier and conjointly published in [1958 in the Journal of the American Statistical
+Association](https://www.jstor.org/stable/2281868), is a non-parametric[1] statistic
+that allows us to estimate the survival function.
+
+This statistic gives the probability that an observation will survive past a
+particular time $t$. At $t = 0$, the Kaplan-Meier estimator is $1$ and when $t$
+increase the probability tends to $0$.
+
+```{r}
+library(tidyverse)
+library(survival)
+
+data <- read_csv("train.csv")
+head(data)
+```
+
+- `efs = 1` means the event occurred, failed transplant
+- `efs = 0` means the event did not occur, i.e. censoring
+  
+```{r}
+data |>
+  head(200) |>
+  ggplot(aes(x = efs_time, y = ID, color = efs)) +
+  geom_point()
+```
+
+The `Surv()` function from the {survival} package creates a survival object for
+use as the response in a model formula. There will be one entry for each subject
+that is the survival time, which is followed by a + if the subject was censored.
+
+Let’s look at the first 10 observations:
+```{r}
+Surv(data$efs_time, data$efs)[1:10]
+```
+We see that subject 1 was censored at time 42.356 months, subject 2 had an event
+at time 4.672 months, subject 3 was censored at time 19.793 months, etc.
+
+The `survfit()` function creates survival curves using the Kaplan-Meier method
+based on a formula. Let’s generate the overall survival curve for the entire
+cohort, assign it to object s1, and look at the structure using str():
+
+```{r}
+s1 <- survfit(Surv(time = efs_time, even = efs) ~ 1, data = data)
+str(s1)
+```
+
+Some key components of this `survfit` object that will be used to create survival
+curves include:
+
+- time: the timepoints at which the curve has a step, i.e. at least one event
+  occurred
+- surv: the estimate of survival at the corresponding time Kaplan-Meier plots
+
+### Plot
+
+The {ggsurvfit} package works best if you create the survfit object using the
+included ggsurvfit::survfit2() function, which uses the same syntax to what we
+saw previously with survival::survfit(). The ggsurvfit::survfit2() tracks the
+environment from the function call, which allows the plot to have better default
+values for labeling and p-value reporting.
+
+```{r}
+library(ggsurvfit)
+```
+
+```{r}
+survfit2(Surv(time = efs_time, even = efs) ~ 1, data = data) |>
+  ggsurvfit() +
+  labs(
+    x = "Months",
+    y = "Overall survival probability"
+  ) +
+  add_confidence_interval()+
+  add_risktable()
+```
+
+## Log Rank Test
+
+Log rank test is a statistical hypothesis test to compare two survival rate of
+independent samples. In the log rank test, the Null hypothesis is these survival
+rate are identical. A chi-squared distribution can be used to derive p-value.
+
+When p-value is less than $0.05$ (`p < 0.05`)
+
+## Cox
+
+Cox proportional Hazard is a regression model
+
+```{r}
+coxph(Surv(efs_time, efs) ~ ., data = data)
+```
+
+## Modeling
+
+```{r}
+library(tidymodels)
+```
+
+```{r}
+data_split <- initial_split(data, prop = 0.8)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+## References
+
+[1]: a non-parametric statistic is not based on the assumption of an underlying
+     probability distribution, which makes sense since survival data has a skewed
+     distribution.
+     
+https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html
